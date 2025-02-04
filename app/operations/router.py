@@ -5,6 +5,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.database import Category, new_session, Operation
 from app.categories.router import CategoryType
@@ -47,7 +48,7 @@ async def create_operation(data: Annotated[OperationCreate, Depends()]) -> dict:
             raise HTTPException(status_code=400, detail=e)
 
 @router.get("/")
-async def get_operations_by_categories_type(data: Annotated[OperationGet, Depends()]):
+async def get_operations(data: Annotated[OperationGet, Depends()]):
     async with new_session() as session:
         if data.period is None:
             start_date = date.today()
@@ -67,3 +68,35 @@ async def get_operations_by_categories_type(data: Annotated[OperationGet, Depend
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Операций не найдено"
         )
+
+@router.get("/all/")
+async def get_all_operations(period: Optional[PeriodEnum] = None):
+    async with new_session() as session:
+        if period is None:
+            start_date = date.today()
+        else:
+            start_date = date.today() - timedelta(days=period.value)
+
+        query = (
+        select(Operation)
+        .options(selectinload(Operation.category))  # Загрузка связанных категорий #ЗАПОМНИТЬ
+        .where(Operation.created_at >= start_date)
+    )
+
+        response = await session.execute(query)
+        result = response.scalars().all()
+        
+        if result:
+            # new_res = []
+
+            # for item in result:
+            #     typ = item.category.category_type == "income"
+            #     if typ: 
+            #         new_res.append(f"+{item.amount}")
+            #     else:
+            #         new_res.append(f"-{item.amount}")
+            # return new_res
+            return result
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Операций не найдено")
