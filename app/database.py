@@ -5,7 +5,7 @@ from sqlalchemy import ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, declared_attr
 
-db_url = "sqlite+aiosqlite:///weather.db"
+db_url = "sqlite+aiosqlite:///finance.db"
 engine = create_async_engine(db_url)
 new_session = async_sessionmaker(engine, expire_on_commit=False)
 
@@ -13,15 +13,16 @@ class Model(DeclarativeBase):
     __abstract__ = True
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    name: Mapped[str] = mapped_column()
 
 
 class Category(Model):
     __tablename__ = 'categories'
     
     # Добавить ВАЛИДАТОР - category_type in ("income", "expense")
-
+    
+    name: Mapped[str] = mapped_column()
     category_type: Mapped[str] = mapped_column(Enum("income", "expense"), nullable=False)
+    
     operations: Mapped[List["Operation"]] = relationship("Operation", back_populates="category")
     
     __table_args__ = (
@@ -31,8 +32,8 @@ class Category(Model):
 class Operation(Model):
     __tablename__ = 'operations'
 
-    price: Mapped[float] = mapped_column()
-    created_at: Mapped[date] = mapped_column()
+    amount: Mapped[float] = mapped_column()
+    created_at: Mapped[date] = mapped_column(default=date.today())
     description: Mapped[str] = mapped_column()
 
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id")) 

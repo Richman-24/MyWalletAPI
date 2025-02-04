@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -26,16 +26,22 @@ class CreateCategory(BaseModel):
 
 
 @router.get("/", description="Все категории (доходов или расходов)")
-async def get_categories(type: CategoryType):
+async def get_categories_by_type(type: CategoryType):
     async with new_session() as session:
-        query = select(Category).where(Category.category_type==type)
+        query = select(Category).where(Category.category_type == type)
         response = await session.execute(query)
-        categories = response.scalars().all()
-        
-        return categories
+        result = response.scalars().all()
+
+        if result is not None or len(result) > 0:
+            return result
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Категорий не добавлено"
+        )
 
 
-@router.post("/create", description="Создать категорию")
+
+@router.post("/create/", description="Создать категорию")
 async def create_category(data: Annotated[CreateCategory, Depends()]):
     async with new_session() as session:
 
@@ -52,10 +58,13 @@ async def create_category(data: Annotated[CreateCategory, Depends()]):
             raise HTTPException(status_code=400, detail=f"Категория с таким именем уже существует")
         
 
-
-
-
-
+async def get_all_categories(type: CategoryType):
+    async with new_session() as session:
+        query = select(Category).where(Category.category_type==type)
+        response = await session.execute(query)
+        categories = response.scalars().all()
+        
+        return categories
 
 # @router.post("/categories/create_test", description="Создать категорию test")
 # async def create_category(name: str, type: str):
