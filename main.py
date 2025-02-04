@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.database import create_tables
-from app.router import router as money_router
+from app.categories.router import router as category_router
 
 
 @asynccontextmanager
@@ -22,7 +22,7 @@ async def index():
     return {"Success": "api created successfully"}
 
 
-app.include_router(money_router)
+app.include_router(category_router)
 
 
 if __name__ == "__main__":

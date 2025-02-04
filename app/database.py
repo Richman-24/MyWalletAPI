@@ -1,5 +1,7 @@
 from datetime import date
-from sqlalchemy import ForeignKey
+from typing import List
+
+from sqlalchemy import ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, declared_attr
 
@@ -8,36 +10,33 @@ engine = create_async_engine(db_url)
 new_session = async_sessionmaker(engine, expire_on_commit=False)
 
 class Model(DeclarativeBase):
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(unique=True)
-
     __abstract__ = True
-
-    @declared_attr.directive
-    def __tablename__(cls) -> str:
-        return f"{cls.__name__.lower()}s"
-
-class IncomeCategory(Model):
-    incomes: Mapped[list["Income"]] = relationship("Income", back_populates="category")
-
-class ExpenseCategory(Model):
-    expenses: Mapped[list["Expense"]] = relationship("Expense", back_populates="category")
-
-class Operation(Model): 
-    name: Mapped[str] = mapped_column(unique=False)
-    price: Mapped[float]
-    date: Mapped[date]
-    description: Mapped[str]  # Исправлено: descripiption на description
     
-    __abstract__ = True
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column()
 
-class Income(Operation):
-    category_id: Mapped[int] = mapped_column(ForeignKey("incomecategorys.id"))
-    category: Mapped[IncomeCategory] = relationship("IncomeCategory", back_populates="incomes")
 
-class Expense(Operation):
-    category_id: Mapped[int] = mapped_column(ForeignKey("expensecategorys.id"))
-    category: Mapped[ExpenseCategory] = relationship("ExpenseCategory", back_populates="expenses")
+class Category(Model):
+    __tablename__ = 'categories'
+    
+    # Добавить ВАЛИДАТОР - category_type in ("income", "expense")
+
+    category_type: Mapped[str] = mapped_column(Enum("income", "expense"), nullable=False)
+    operations: Mapped[List["Operation"]] = relationship("Operation", back_populates="category")
+    
+    __table_args__ = (
+        UniqueConstraint('category_type', 'name', name='uq_type_name'),  # Уникальное сочетание
+    )
+
+class Operation(Model):
+    __tablename__ = 'operations'
+
+    price: Mapped[float] = mapped_column()
+    created_at: Mapped[date] = mapped_column()
+    description: Mapped[str] = mapped_column()
+
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.id")) 
+    category: Mapped[Category] = relationship("Category", back_populates="operations")
 
 async def create_tables():
     async with engine.begin() as conn:
