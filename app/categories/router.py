@@ -32,13 +32,12 @@ async def get_categories_by_type(type: CategoryType):
         response = await session.execute(query)
         result = response.scalars().all()
 
-        if result is not None or len(result) > 0:
+        if result is not None and len(result) > 0:
             return result
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Категорий не добавлено"
         )
-
 
 
 @router.post("/create/", description="Создать категорию")
@@ -58,9 +57,9 @@ async def create_category(data: Annotated[CreateCategory, Depends()]):
             raise HTTPException(status_code=400, detail=f"Категория с таким именем уже существует")
         
 
-async def get_all_categories(type: CategoryType):
+async def get_all_categories():
     async with new_session() as session:
-        query = select(Category).where(Category.category_type==type)
+        query = select(Category)
         response = await session.execute(query)
         categories = response.scalars().all()
         

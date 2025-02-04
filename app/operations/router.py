@@ -1,10 +1,15 @@
-from typing import Annotated, List, Optional
+from datetime import date, timedelta
+from enum import Enum
+from typing import Annotated, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.database import Category, new_session, Operation
 from app.categories.router import CategoryType
+
+
 router = APIRouter(
     prefix="/api/operations",
     tags=["Операции"]
@@ -15,6 +20,18 @@ class OperationCreate(BaseModel):
     description: Optional[str] = None
     category_id: int
 
+
+class PeriodEnum(int, Enum):
+    DAY = 1
+    WEEK = 7
+    MONTH = 31
+
+
+class OperationGet(BaseModel):
+    type: CategoryType
+    period: Optional[PeriodEnum] = None
+
+    
 @router.post("/create/")
 async def create_operation(data: Annotated[OperationCreate, Depends()]) -> dict:
     async with new_session() as session:
@@ -29,17 +46,24 @@ async def create_operation(data: Annotated[OperationCreate, Depends()]) -> dict:
             await session.rollback()
             raise HTTPException(status_code=400, detail=e)
 
-@router.get("/{type}")
-async def get_operations_by_category_type(type: CategoryType):
+@router.get("/")
+async def get_operations_by_categories_type(data: Annotated[OperationGet, Depends()]):
     async with new_session() as session:
-        query = select(Operation).join(Category).where(Category.category_type == type)
+        if data.period is None:
+            start_date = date.today()
+        else:
+            start_date = date.today() - timedelta(days=data.period.value)
+
+        query = select(Operation).join(Category).where(
+            Category.category_type == data.type,
+            Operation.created_at >= start_date
+        )
         response = await session.execute(query)
         result = response.scalars().all()
 
-        if result is not None and len(result) > 0:
+        if result:
             return result
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Операций не найдено"
         )
-
