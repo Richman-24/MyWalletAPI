@@ -49,6 +49,7 @@ async def create_operation(data: Annotated[OperationCreate, Depends()]) -> dict:
 
 @router.get("/")
 async def get_operations(data: Annotated[OperationGet, Depends()]):
+    # Вывод операций ( только доходов \ расходов) за период 1\7\31\365
     async with new_session() as session:
         if data.period is None:
             start_date = date.today()
@@ -71,9 +72,10 @@ async def get_operations(data: Annotated[OperationGet, Depends()]):
 
 @router.get("/all/")
 async def get_all_operations(period: Optional[PeriodEnum] = None):
+    # Вывод ВСЕХ операций за период 1\7\31\365
     async with new_session() as session:
         if period is None:
-            start_date = date.today()
+            start_date = date.today() - timedelta(days=364)
         else:
             start_date = date.today() - timedelta(days=period.value)
 
@@ -87,16 +89,8 @@ async def get_all_operations(period: Optional[PeriodEnum] = None):
         result = response.scalars().all()
         
         if result:
-            # new_res = []
-
-            # for item in result:
-            #     typ = item.category.category_type == "income"
-            #     if typ: 
-            #         new_res.append(f"+{item.amount}")
-            #     else:
-            #         new_res.append(f"-{item.amount}")
-            # return new_res
             return result
+        
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Операций не найдено")

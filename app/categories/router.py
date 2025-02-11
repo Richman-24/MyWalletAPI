@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.categories.repository import CategoryRepo
+from app.categories.schemas import CategoryType, CreateCategory
 from app.database import new_session, Category
 
 
@@ -14,17 +16,7 @@ router = APIRouter(
     tags=["Категории"]
 )
 
-
-class CategoryType(str, Enum):
-    income = "income"
-    expense = "expense"
-
-
-class CreateCategory(BaseModel):
-    category_type: CategoryType
-    name: str
-
-
+# List (by_type)
 @router.get("/", description="Все категории (доходов или расходов)")
 async def get_categories_by_type(type: CategoryType):
     async with new_session() as session:
@@ -39,58 +31,59 @@ async def get_categories_by_type(type: CategoryType):
             detail="Категорий не добавлено"
         )
 
-
-@router.post("/create/", description="Создать категорию")
-async def create_category(data: Annotated[CreateCategory, Depends()]):
-    async with new_session() as session:
-
-        new_data = data.model_dump()
-        new_data["name"] = data.name.lower()
-        new_category = Category(**new_data)
-        
-        try:
-            session.add(new_category)
-            await session.commit() 
-            return {"message": "Категория успешно создана", "category": new_category.name.title()}
-        except IntegrityError:
-            await session.rollback()
-            raise HTTPException(status_code=400, detail=f"Категория с таким именем уже существует")
-        
-
-async def get_all_categories():
-    async with new_session() as session:
-        query = select(Category)
-        response = await session.execute(query)
-        categories = response.scalars().all()
-        
+# List (all)
+@router.get("/all/", description="Вывести вообще все категории")
+async def get_all_category():
+    categories = await CategoryRepo.get_all()
+    
+    if categories is not None and len(categories) > 0:
         return categories
+    
+    raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Категорий не добавлено"
+        )
 
-# @router.post("/categories/create_test", description="Создать категорию test")
-# async def create_category(name: str, type: str):
-#     async with new_session() as session:        
-#         new_category = Category(name=name, category_type=type)
-        
-#         try:
-#             session.add(new_category)
-#             await session.commit() 
-#             return {"message": "Категория успешно создана", "category": new_category.name}
-#         except IntegrityError:
-#             await session.rollback()
-#             raise HTTPException(status_code=400, detail=f"Категория с таким именем уже существует")
+# Create
+@router.post("/create/", description="Создать категорию")
+async def create_category(data: Annotated[CreateCategory, Depends()]) -> dict[str, str]:
+        try:
+            new_category = await CategoryRepo.create_one(data)
+            return {"message": "Категория успешно создана:", "id": str(new_category)}
+
+        except Exception as e:
+            raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+# Retrieve
+@router.get("/{category_id}")
+async def get_one_category(category_id: str):
+    try:
+        category_data = await CategoryRepo.get_one(category_id)
+        return category_data
+
+    except Exception as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
 
 
-# # @router.post("categories/name/") - работает.
-# async def get_category_by_name(data: Annotated[CreateCategory, Depends()]):
-#     async with new_session() as session:
-#         new_data = data.model_dump()
-#         query = select(Category).where(
-#             Category.category_type == new_data["category_type"],
-#             Category.name == new_data["name"])
-        
-#         result = await session.execute(query)
-#         category = result.scalars().first()
-        
-#         if category is not None:
-#             return category
-#         else:
-#             raise HTTPException(status_code=404, detail="Категория не найдена")
+# Update
+@router.post("/{category_id}/edit")
+async def update_category(
+    category_id: str,
+    data: Annotated[CreateCategory, Depends()])  -> dict[str, str]:
+    
+    try:
+        updated_category = await CategoryRepo.update_one(category_id, data) 
+        return {"message": "Категория успешно изменена:", "id": str(updated_category)}
+
+    except Exception as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+# Delete
+@router.delete("/{category_id}/delete")
+async def delete_category(category_id: str):
+    try:
+        await CategoryRepo.delete_one(category_id)
+        return {"message": "Категория успешно удалена"}
+    except Exception as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e.detail))
