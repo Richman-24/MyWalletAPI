@@ -1,14 +1,9 @@
-from datetime import date, timedelta
-from enum import Enum
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from fastapi import APIRouter, Depends, HTTPException
 
-from app.database import Category, new_session, Operation
-from app.categories.router import CategoryType
+from app.operations.repository import OperationsRepo
+from app.operations.schemas import OperationCreate, OperationGet, PeriodEnum
 
 
 router = APIRouter(
@@ -16,81 +11,66 @@ router = APIRouter(
     tags=["Операции"]
 )
 
-class OperationCreate(BaseModel):
-    amount: float
-    description: Optional[str] = None
-    category_id: int
-
-
-class PeriodEnum(int, Enum):
-    DAY = 1
-    WEEK = 7
-    MONTH = 31
-
-
-class OperationGet(BaseModel):
-    type: CategoryType
-    period: Optional[PeriodEnum] = None
-
-    
-@router.post("/create/")
-async def create_operation(data: Annotated[OperationCreate, Depends()]) -> dict:
-    async with new_session() as session:
-        new_data = data.model_dump()
-        new_operation = Operation(**new_data)
-
-        try:
-            session.add(new_operation)
-            await session.commit() 
-            return {"message": "Операция успешно записана"}
-        except Exception as e:
-            await session.rollback()
-            raise HTTPException(status_code=400, detail=e)
-
-@router.get("/")
+# List (by type for period) 
+@router.get("/", description="Список доходов \ расходов за период N")
 async def get_operations(data: Annotated[OperationGet, Depends()]):
     # Вывод операций ( только доходов \ расходов) за период 1\7\31\365
-    async with new_session() as session:
-        if data.period is None:
-            start_date = date.today()
-        else:
-            start_date = date.today() - timedelta(days=data.period.value)
+    try:
+        operations = await OperationsRepo.get_operations(data)
+        return operations
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e.detail))
 
-        query = select(Operation).join(Category).where(
-            Category.category_type == data.type,
-            Operation.created_at >= start_date
-        )
-        response = await session.execute(query)
-        result = response.scalars().all()
 
-        if result:
-            return result
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Операций не найдено"
-        )
-
-@router.get("/all/")
+# List (for the period)
+@router.get("/all/", description="Общий список операций за период N")
 async def get_all_operations(period: Optional[PeriodEnum] = None):
     # Вывод ВСЕХ операций за период 1\7\31\365
-    async with new_session() as session:
-        if period is None:
-            start_date = date.today() - timedelta(days=364)
-        else:
-            start_date = date.today() - timedelta(days=period.value)
-
-        query = (
-        select(Operation)
-        .options(selectinload(Operation.category))  # Загрузка связанных категорий #ЗАПОМНИТЬ
-        .where(Operation.created_at >= start_date)
-    )
-
-        response = await session.execute(query)
-        result = response.scalars().all()
+    try:
+        operations = await OperationsRepo.get_all(period.value if period else None)
+        return operations
         
-        if result:
-            return result
-        
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Операций не найдено")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e.detail))
+
+
+# Create one
+@router.post("/create/", description="Создать запись")
+async def create_operation(data: Annotated[OperationCreate, Depends()]) -> dict:
+    try:
+        new_op = await OperationsRepo.create_one(data)
+        return {"message": "Операция успешно записана", "id": new_op.id}
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e.detail))
+
+# Retrive one
+@router.get("/{operation_id}/", description="Просмотреть запись по id")
+async def get_operation(operation_id: str):
+    try:
+        op_data = await OperationsRepo.get_one_operation(operation_id)
+        return op_data
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Update one
+@router.patch("/{operation_id}/edit/", description="Изменить запись")
+async def update_operation(
+    operation_id: str, data: Annotated[OperationCreate, Depends()]):
+    try: 
+        upd_operation = await OperationsRepo.update_operation(operation_id, data)
+        return {"message": "Запись успешно изменена:", "id": str(upd_operation)}
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e.detail))
+
+# Delete one
+@router.delete("/{operation_id}/delete/", description="Удалить запись")
+async def delete_operation(operation_id: str):
+    try:
+        await OperationsRepo.delete_one(operation_id)
+        return {"message": "Запись успешно удалена"}
+    except Exception as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e.detail))

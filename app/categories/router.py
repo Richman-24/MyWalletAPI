@@ -1,10 +1,7 @@
-from enum import Enum
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 
 from app.categories.repository import CategoryRepo
 from app.categories.schemas import CategoryType, CreateCategory
@@ -17,7 +14,7 @@ router = APIRouter(
 )
 
 # List (by_type)
-@router.get("/", description="Все категории (доходов или расходов)")
+@router.get("/", description="Все категории (доходов или расходов).")
 async def get_categories_by_type(type: CategoryType):
     async with new_session() as session:
         query = select(Category).where(Category.category_type == type)
@@ -32,7 +29,7 @@ async def get_categories_by_type(type: CategoryType):
         )
 
 # List (all)
-@router.get("/all/", description="Вывести вообще все категории")
+@router.get("/all/", description="Вывести вообще все категории.")
 async def get_all_category():
     categories = await CategoryRepo.get_all()
     
@@ -45,7 +42,7 @@ async def get_all_category():
         )
 
 # Create
-@router.post("/create/", description="Создать категорию")
+@router.post("/create/", description="Создать категорию.")
 async def create_category(data: Annotated[CreateCategory, Depends()]) -> dict[str, str]:
         try:
             new_category = await CategoryRepo.create_one(data)
@@ -55,7 +52,7 @@ async def create_category(data: Annotated[CreateCategory, Depends()]) -> dict[st
             raise HTTPException(status_code=e.status_code, detail=e.detail)
 
 # Retrieve
-@router.get("/{category_id}")
+@router.get("/{category_id}", description="Получить категорию по id.")
 async def get_one_category(category_id: str):
     try:
         category_data = await CategoryRepo.get_one(category_id)
@@ -66,7 +63,7 @@ async def get_one_category(category_id: str):
 
 
 # Update
-@router.post("/{category_id}/edit")
+@router.patch("/{category_id}/edit/", description="Изменить категорию.")
 async def update_category(
     category_id: str,
     data: Annotated[CreateCategory, Depends()])  -> dict[str, str]:
@@ -80,7 +77,7 @@ async def update_category(
 
 
 # Delete
-@router.delete("/{category_id}/delete")
+@router.delete("/{category_id}/delete/", description="Удалить категорию.")
 async def delete_category(category_id: str):
     try:
         await CategoryRepo.delete_one(category_id)
